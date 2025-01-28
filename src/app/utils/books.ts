@@ -1,4 +1,4 @@
-import { Book } from "@/types";
+import {Book} from "@/types";
 
 interface FetchBooksArgs {
     language: string;
@@ -12,11 +12,16 @@ interface FetchBooksArgs {
 export async function fetchBooks(args: FetchBooksArgs): Promise<Book[]> {
     const { language, seed, avgLikes, avgReviews, page, limit } = args;
 
-    const response = await fetch("/api/books", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ language, seed, avgLikes, avgReviews, page, limit }),
+    const query = new URLSearchParams({
+        language,
+        seed: seed.toString(),
+        avgLikes: avgLikes.toString(),
+        avgReviews: avgReviews.toString(),
+        page: page.toString(),
+        limit: limit?.toString() || "",
     });
+
+    const response = await fetch(`/api/books?${query.toString()}`);
 
     if (!response.ok) {
         throw new Error("Failed to fetch books");
