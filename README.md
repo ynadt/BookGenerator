@@ -1,2 +1,2 @@
-# BookGenerator
-Random book generator for different locales
+# Random Book Generator App with change of locales
+
