@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useReducer, useRef, useCallback } from "react";
 import BookRow from "./BookRow";
-import { Book } from "@/types";
+import { Book, ActionTypes, Action, State } from "@/types";
 import { fetchBooks } from "@/app/utils/books";
-import {FIRST_PAGE_LIMIT, OTHER_PAGES_LIMIT} from "@/app/constants/constants";
+import { FIRST_PAGE_LIMIT, OTHER_PAGES_LIMIT } from "@/app/constants/constants";
 
 interface TableProps {
   language: string;
@@ -12,71 +12,140 @@ interface TableProps {
   avgLikes: number;
   avgReviews: number;
   view: "table" | "gallery";
-  onBooksUpdate: (books: Book[]) => void;
+  onBooksUpdate: (books: Book[], isReset: boolean) => void;
 }
 
+const initialState: State = {
+  books: [],
+  page: 1,
+  filters: {
+    language: "en_US",
+    seed: 123456,
+    avgLikes: 4,
+    avgReviews: 4.7,
+  },
+  loading: false,
+  error: null,
+};
+
+const reducer = (state: State, action: Action): State => {
+  switch (action.type) {
+    case ActionTypes.RESET:
+      return {
+        ...state,
+        books: [],
+        page: 1,
+        loading: true,
+        filters: action.payload.filters,
+      };
+    case ActionTypes.LOAD_MORE:
+      return {
+        ...state,
+        page: state.page + 1,
+        loading: true,
+      };
+    case ActionTypes.FETCH_SUCCESS:
+      return {
+        ...state,
+        books: action.payload.isReset
+            ? action.payload.books
+            : [...state.books, ...action.payload.books],
+        loading: false,
+      };
+    case ActionTypes.FETCH_FAILURE:
+      return {
+        ...state,
+        loading: false,
+        error: action.payload,
+      };
+    default:
+      throw new Error("Unknown action type");
+  }
+};
+
 const Table: React.FC<TableProps> = ({
-  language,
-  seed,
-  avgLikes,
-  avgReviews,
-  view,
-  onBooksUpdate,
-}) => {
-  const [books, setBooks] = useState<Book[]>([]);
-  const [page, setPage] = useState(1);
-  const [resetTrigger, setResetTrigger] = useState(false);
+                                       language,
+                                       seed,
+                                       avgLikes,
+                                       avgReviews,
+                                       view,
+                                       onBooksUpdate,
+                                     }) => {
+  const [state, dispatch] = useReducer(reducer, initialState);
+  const isFetchingRef = useRef(false);
 
-  const loadBooks = async () => {
-    try {
-      const isFirstPage = page === 1 || resetTrigger;
-      const limit = isFirstPage ? FIRST_PAGE_LIMIT : OTHER_PAGES_LIMIT;
-      const newBooks = await fetchBooks({
-        language,
-        seed,
-        avgLikes,
-        avgReviews,
-        page,
-        limit,
+  const { books, page, filters, loading } = state;
+
+  const fetchBooksData = useCallback(
+      async (isReset = false): Promise<void> => {
+        if (isFetchingRef.current) return;
+        isFetchingRef.current = true;
+
+        try {
+          const limit = isReset ? FIRST_PAGE_LIMIT : OTHER_PAGES_LIMIT;
+          const fetchedBooks = await fetchBooks({
+            language: filters.language,
+            seed: filters.seed,
+            avgLikes: filters.avgLikes,
+            avgReviews: filters.avgReviews,
+            page,
+            limit,
+          });
+
+          dispatch({
+            type: ActionTypes.FETCH_SUCCESS,
+            payload: { books: fetchedBooks, isReset },
+          });
+
+          onBooksUpdate(fetchedBooks, isReset);
+        } catch (error: unknown) {
+          const errorMessage =
+              error instanceof Error ? error.message : "An unknown error occurred";
+          dispatch({ type: ActionTypes.FETCH_FAILURE, payload: errorMessage });
+        } finally {
+          isFetchingRef.current = false;
+        }
+      },
+      [filters, page, onBooksUpdate]
+  );
+
+  useEffect(() => {
+    const newFilters = { language, seed, avgLikes, avgReviews };
+    if (JSON.stringify(filters) !== JSON.stringify(newFilters)) {
+      dispatch({
+        type: ActionTypes.RESET,
+        payload: { filters: newFilters },
       });
-      const updatedBooks = isFirstPage ? newBooks : [...books, ...newBooks];
-      setBooks(updatedBooks);
-      onBooksUpdate(updatedBooks);
-      setResetTrigger(false);
-    } catch (error) {
-      console.error("Failed to fetch books:", error);
     }
-  };
+  }, [language, seed, avgLikes, avgReviews, filters]);
 
   useEffect(() => {
-    setBooks([]);
-    setPage(1);
-    setResetTrigger(true);
-    loadBooks();
-  }, [language, seed, avgLikes, avgReviews]);
-
-  useEffect(() => {
-    if (page === 1 || !resetTrigger) {
-      loadBooks();
-    }
-  }, [page]);
+    fetchBooksData(page === 1);
+  }, [page, filters, fetchBooksData]);
 
   useEffect(() => {
     const handleScroll = () => {
       if (
           window.innerHeight + document.documentElement.scrollTop + 1 >=
-          document.documentElement.scrollHeight
+          document.documentElement.scrollHeight &&
+          !loading &&
+          !isFetchingRef.current
       ) {
-        setPage((prevPage) => prevPage + 1);
+        dispatch({ type: ActionTypes.LOAD_MORE });
       }
     };
 
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+  }, [loading]);
 
   return (
-      <div className="relative min-h-screen">
+      <div className="relative">
+        {loading && (
+            <div className="fixed inset-0 flex items-center justify-center z-50">
+              <div className="loader border-t-4 border-blue-500 rounded-full w-16 h-16 animate-spin"></div>
+            </div>
+        )}
         {view === "table" ? (
             <table className="table-auto w-full border-collapse border border-gray-200 shadow-md rounded-lg overflow-hidden">
               <thead className="sticky top-0 bg-white bg-gradient-to-t from-gray-200 to-blue-50 shadow">
@@ -99,16 +168,16 @@ const Table: React.FC<TableProps> = ({
               </tr>
               </thead>
               <tbody>
-              {books.map((book, idx) => (
-                  <BookRow key={`${seed}-${page}-${idx}`} book={book} />
+              {books.map((book: Book, idx: number) => (
+                  <BookRow key={`${filters.seed}-${idx}`} book={book} />
               ))}
               </tbody>
             </table>
         ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6 p-4">
-              {books.map((book, idx) => (
+              {books.map((book: Book, idx: number) => (
                   <div
-                      key={`${seed}-${page}-${idx}`}
+                      key={`${filters.seed}-${idx}`}
                       className="bg-white shadow-lg rounded-lg overflow-hidden border border-gray-200"
                   >
                     <div

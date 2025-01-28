@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import Controls from "./components/Controls";
 import Table from "./components/Table";
 import { Book } from "@/types";
-import {exportBooksToCSV} from "@/app/utils/exportCsv";
+import { exportBooksToCSV } from "@/app/utils/exportCsv";
 
 const HomePage: React.FC = () => {
     const [language, setLanguage] = useState<string>("en_US");
@@ -13,6 +13,15 @@ const HomePage: React.FC = () => {
     const [avgReviews, setAvgReviews] = useState<number>(4.7);
     const [view, setView] = useState<"table" | "gallery">("table");
     const [currentBooks, setCurrentBooks] = useState<Book[]>([]);
+
+    const handleBooksUpdate = useCallback(
+        (newBooks: Book[], isReset: boolean) => {
+            setCurrentBooks((prevBooks) =>
+                isReset ? newBooks : [...prevBooks, ...newBooks]
+            );
+        },
+        []
+    );
 
     const handleExportCSV = () => exportBooksToCSV(currentBooks, seed);
 
@@ -38,7 +47,7 @@ const HomePage: React.FC = () => {
                     avgLikes={avgLikes}
                     avgReviews={avgReviews}
                     view={view}
-                    onBooksUpdate={setCurrentBooks}
+                    onBooksUpdate={handleBooksUpdate}
                 />
             </div>
         </main>
