@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Image from "next/image";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import {Book, Review} from "@/types";
 
@@ -93,9 +94,11 @@ const BookRow: React.FC<{ book: Book }> = ({ book }) => {
                                             key={idx}
                                             className="p-4 bg-white rounded-md shadow-md border border-gray-200 flex items-start gap-4"
                                         >
-                                            <img
+                                            <Image
                                                 src={review.avatar}
                                                 alt={review.author}
+                                                width={48}
+                                                height={48}
                                                 className="w-12 h-12 rounded-full shadow"
                                             />
                                             <div>
