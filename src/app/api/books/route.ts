@@ -46,7 +46,10 @@ export async function GET(req: Request) {
         const bookIndex = calculateBookIndex(page, i);
         const isbn = localizedFaker.commerce.isbn();
         const title = localizedFaker.book.title();
-        const authors = [localizedFaker.book.author(), localizedFaker.book.author()];
+        const authors = Array.from(
+            { length: localizedFaker.number.int({ min: 1, max: 2 }) },
+            () => localizedFaker.book.author()
+        );
         const publisher = localizedFaker.book.publisher();
         const likes =
             Math.floor(avgLikes) +
